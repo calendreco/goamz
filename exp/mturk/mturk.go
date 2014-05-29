@@ -14,12 +14,16 @@
 package mturk
 
 import (
+	// "log"
+	// "reflect"
+	"strings"
+	"html"
 	"encoding/xml"
 	"errors"
 	"fmt"
 	"github.com/mitchellh/goamz/aws"
 	"net/http"
-	//"net/http/httputil"
+	"net/http/httputil"
 	"net/url"
 	"strconv"
 	"time"
@@ -33,7 +37,7 @@ type MTurk struct {
 func New(auth aws.Auth) *MTurk {
 	mt := &MTurk{Auth: auth}
 	var err error
-	mt.URL, err = url.Parse("http://mechanicalturk.amazonaws.com/")
+	mt.URL, err = url.Parse("https://mechanicalturk.amazonaws.com/")
 	if err != nil {
 		panic(err.Error())
 	}
@@ -122,6 +126,65 @@ type HIT struct {
 	NumberOfAssignmentsPending   uint
 	NumberOfAssignmentsAvailable uint
 	NumberOfAssignmentsCompleted uint
+}
+
+type Answer struct{
+	QuestionIdentifier string
+	FreeText string
+	SelectionIdentifier string
+	OtherSelectionText string
+	UploadedFileSizeInBytes string
+	UploadedFileKey string
+}
+
+func (l *AssignmentAnswer) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+    var (
+    	content string
+    	resp QuestionFormAnswers
+    )
+    if err := d.DecodeElement(&content, &start); err != nil {
+        return err
+    }
+    c := strings.NewReader(html.UnescapeString(content))
+
+    dec := xml.NewDecoder(c)
+    if err := dec.Decode(&resp); err != nil{
+    	return err
+    }
+
+    *l = AssignmentAnswer{resp}
+    return nil
+}
+
+type QuestionFormAnswers struct{
+	Answers []Answer `xml:"Answer"`
+}
+
+type AssignmentAnswer struct{
+	QuestionFormAnswers QuestionFormAnswers
+}
+
+type Assignment struct{
+	AssignmentId     string
+	WorkerId         string
+	HITId            string
+	AssignmentStatus string
+	AutoApprovalTime string
+	AcceptTime       string
+	SubmitTime       string
+	ApprovalTime     string
+	Answers          AssignmentAnswer `xml:"Answer"`
+}
+
+type GetAssignmentResult struct{
+	Request xmlRequest
+
+	Assignment Assignment
+}
+
+type GetAssignmentResponse struct{
+	RequestId  string `xml:"OperationRequest>RequestId"`
+	GetAssignmentResult GetAssignmentResult
 }
 
 // The main data structure returned by SearchHITs
@@ -229,6 +292,27 @@ func (mt *MTurk) SearchHITs() (s *SearchHITsResult, err error) {
 	return
 }
 
+// func (mt *MTurk) GetHIT(HITId string) (h *HIT, err error) {
+// 	params := make(map[string]string)
+// 	params["HitId"] = HITId
+// 	err = mt.query(params, "GetHIT", &response)
+// 	if err == nil {
+// 		s = &response.SearchHITsResult
+// 	}
+// 	return
+// }
+
+func (mt *MTurk) GetAssignment(AssignmentId string) (a *GetAssignmentResult, err error){
+	params := make(map[string]string)
+	params["AssignmentId"] = AssignmentId
+	var response GetAssignmentResponse
+	err = mt.query(params, "GetAssignment", &response)
+	if err == nil {
+		a = &response.GetAssignmentResult
+	}
+	return
+}
+
 // Adds common parameters to the "params" map, signs the request,
 // adds the signature to the "params" map and sends the request
 // to the server.  It then unmarshals the response in to the "resp"
@@ -251,8 +335,8 @@ func (mt *MTurk) query(params map[string]string, operation string, resp interfac
 	if err != nil {
 		return err
 	}
-	//dump, _ := httputil.DumpResponse(r, true)
-	//println("DUMP:\n", string(dump))
+	dump, _ := httputil.DumpResponse(r, true)
+	println("DUMP:\n", string(dump))
 	if r.StatusCode != 200 {
 		return errors.New(fmt.Sprintf("%d: unexpected status code", r.StatusCode))
 	}

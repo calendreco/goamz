@@ -2,11 +2,12 @@ package mturk_test
 
 import (
 	"github.com/mitchellh/goamz/aws"
-	"github.com/mitchellh/goamz/exp/mturk"
+	"github.com/calendreco/goamz/exp/mturk"
 	"github.com/mitchellh/goamz/testutil"
 	. "github.com/motain/gocheck"
 	"net/url"
 	"testing"
+	// "log"
 )
 
 func Test(t *testing.T) {
@@ -23,7 +24,7 @@ var testServer = testutil.NewHTTPServer()
 
 func (s *S) SetUpSuite(c *C) {
 	testServer.Start()
-	auth := aws.Auth{"abc", "123", ""}
+	auth := aws.Auth{"AKIAJEPMI3TL2L3T253A", "aLIzrSLAsJQjBCYuEn5xMiUsxmN5urWo6VI/ONrG", ""}
 	u, err := url.Parse(testServer.URL)
 	if err != nil {
 		panic(err.Error())
@@ -88,4 +89,23 @@ func (s *S) TestSearchHITs(c *C) {
 	c.Assert(hitResult.HITs[0].NumberOfAssignmentsPending, Equals, uint(0))
 	c.Assert(hitResult.HITs[0].NumberOfAssignmentsAvailable, Equals, uint(1))
 	c.Assert(hitResult.HITs[0].NumberOfAssignmentsCompleted, Equals, uint(0))
+}
+
+func (s *S) TestGetAssignment(c *C){
+	testServer.Response(200, nil, BasicAssignmentResponse)
+	assignmentResult, err := s.mturk.GetAssignment("3DR23U6WE6RZ27DEYI0P5KERFGUTEW")
+	c.Assert(err, IsNil)
+	c.Assert(assignmentResult, NotNil)
+	c.Assert(assignmentResult.Assignment.AssignmentId, Equals, "3DR23U6WE6RZ27DEYI0P5KERFGUTEW")
+	c.Assert(assignmentResult.Assignment.WorkerId, Equals, "A100VV1V2XDQI7")
+	c.Assert(assignmentResult.Assignment.HITId, Equals, "307FVKVSYRSRPNLK67G92IFZ9ED74M")
+	c.Assert(assignmentResult.Assignment.AssignmentStatus, Equals, "Approved")
+	c.Assert(assignmentResult.Assignment.AutoApprovalTime, Equals, "2014-05-05T06:10:41Z")
+	c.Assert(assignmentResult.Assignment.AcceptTime, Equals, "2014-05-04T22:07:54Z")
+	c.Assert(assignmentResult.Assignment.SubmitTime, Equals, "2014-05-04T22:10:41Z")
+	c.Assert(assignmentResult.Assignment.ApprovalTime, Equals, "2014-05-05T06:12:23Z")
+
+	c.Assert(len(assignmentResult.Assignment.Answers.QuestionFormAnswers.Answers), Equals, 1)
+	c.Assert(assignmentResult.Assignment.Answers.QuestionFormAnswers.Answers[0].QuestionIdentifier, Equals, "Q1HasEvents")
+	c.Assert(assignmentResult.Assignment.Answers.QuestionFormAnswers.Answers[0].FreeText, Equals, "no")
 }
